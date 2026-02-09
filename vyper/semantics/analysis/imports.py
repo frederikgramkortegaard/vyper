@@ -173,7 +173,9 @@ class ImportAnalyzer:
             qualified_module_name = module_prefix + name
 
             # Set on alias_node for more precise error messages
-            compiler_input, ast = self._load_import(alias_node, level, qualified_module_name, alias)
+            compiler_input, ast = self._load_import(level, qualified_module_name)
+            # check resolved path (catches different relative paths to same file)
+            self._check_duplicate_import(compiler_input, alias_node, alias)
             self._compiler_inputs[compiler_input] = ast
 
             if "import_infos" not in import_node._metadata:
@@ -185,9 +187,7 @@ class ImportAnalyzer:
 
     # load an InterfaceT or ModuleInfo from an import.
     # raises FileNotFoundError
-    def _check_duplicate_import(
-        self, file: CompilerInput, node: vy_ast.VyperNode, alias: str
-    ):
+    def _check_duplicate_import(self, file: CompilerInput, node: vy_ast.VyperNode, alias: str):
         # use resolved_path to detect duplicates, not the relative import path,
         # since different relative paths can resolve to the same file
         # (e.g., `from . import x` and `from ..pkg import x`)
@@ -197,9 +197,7 @@ class ImportAnalyzer:
             raise DuplicateImport(f"{alias} imported more than once!", previous_import_stmt, node)
         self.graph.imported_modules[resolved] = node
 
-    def _load_import(
-        self, node: vy_ast.VyperNode, level: int, module_str: str, alias: str
-    ) -> tuple[CompilerInput, Any]:
+    def _load_import(self, level: int, module_str: str) -> tuple[CompilerInput, Any]:
         if _is_builtin(level, module_str):
             return _load_builtin_import(level, module_str)
 
@@ -211,9 +209,6 @@ class ImportAnalyzer:
             path_vy = path.with_suffix(".vy")
             file = self._load_file(path_vy, level)
             assert isinstance(file, FileInput)  # mypy hint
-
-            # check resolved path (catches different relative paths to same file)
-            self._check_duplicate_import(file, node, alias)
 
             module_ast = self._ast_from_file(file)
             self._resolve_imports_r(module_ast)
@@ -229,8 +224,6 @@ class ImportAnalyzer:
             file = self._load_file(path.with_suffix(".vyi"), level)
             assert isinstance(file, FileInput)  # mypy hint
 
-            self._check_duplicate_import(file, node, alias)
-
             module_ast = self._ast_from_file(file)
             self._resolve_imports_r(module_ast)
 
@@ -244,8 +237,6 @@ class ImportAnalyzer:
             if isinstance(file, FileInput):
                 file = try_parse_abi(file)
             assert isinstance(file, JSONInput)  # mypy hint
-
-            self._check_duplicate_import(file, node, alias)
 
             return file, file.data
         except FileNotFoundError:
