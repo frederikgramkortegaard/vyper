@@ -256,7 +256,7 @@ def bar() -> uint256:
 
 def test_duplicate_import_via_different_paths_json(make_input_bundle):
     # test duplicate .json import detection via different relative paths
-    abi_code = """[{"name": "foo", "type": "function", "inputs": [], "outputs": []}]"""
+    abi_code = json.dumps([{"name": "foo", "type": "function", "inputs": [], "outputs": []}])
 
     main_code = """
 from . import abi as abi1
